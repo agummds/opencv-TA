@@ -4,6 +4,7 @@ import tensorflow as tf
 import time
 import os
 import requests
+from lcd_display import LCDDisplay
 
 # Constants
 MODEL_URL = "https://raw.githubusercontent.com/agummds/Mask-RCNN-TA/master/model.tflite"
@@ -39,7 +40,7 @@ def load_model():
         print(f"Error loading model: {e}")
         return None, None, None
 
-def process_frame(frame, interpreter, input_details, output_details):
+def process_frame(frame, interpreter, input_details, output_details, lcd_display=None):
     """Process a single frame for body segmentation and measurement"""
     # Convert frame to grayscale
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -114,6 +115,10 @@ def process_frame(frame, interpreter, input_details, output_details):
         print(f"Width: {width_cm:.1f} cm")
         print(f"Height: {height_cm:.1f} cm")
         print(f"Pixel dimensions: {w}x{h}")
+        
+        # Update LCD display if available
+        if lcd_display is not None:
+            lcd_display.display_measurements(width_cm, height_cm)
     
     return result
 
@@ -125,6 +130,14 @@ def main():
     interpreter, input_details, output_details = load_model()
     if interpreter is None:
         return
+    
+    # Initialize LCD display
+    try:
+        lcd = LCDDisplay()
+        print("LCD display initialized successfully")
+    except Exception as e:
+        print(f"Error initializing LCD display: {e}")
+        lcd = None
     
     # Initialize camera with minimal settings
     print("Initializing camera...")
@@ -154,7 +167,7 @@ def main():
             break
         
         # Process frame
-        result = process_frame(frame, interpreter, input_details, output_details)
+        result = process_frame(frame, interpreter, input_details, output_details, lcd)
         
         # Show result
         cv2.imshow("Segmentation and Measurement", result)
@@ -166,6 +179,8 @@ def main():
     # Cleanup
     cap.release()
     cv2.destroyAllWindows()
+    if lcd is not None:
+        lcd.cleanup()
 
 if __name__ == "__main__":
     main() 
