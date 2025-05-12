@@ -5,6 +5,7 @@ import time
 import os
 import requests
 from lcd_display import LCDDisplay
+from mqtt_client import MQTTClient
 
 # Constants
 MODEL_URL = "https://raw.githubusercontent.com/agummds/Mask-RCNN-TA/master/model.tflite"
@@ -12,6 +13,10 @@ MODEL_PATH = "model.tflite"
 FIXED_DISTANCE = 150  # cm
 PIXEL_TO_CM = 0.187  # cm per pixel
 MODEL_INPUT_SIZE = 640
+
+# Initialize MQTT client
+mqtt_client = MQTTClient()
+mqtt_client.connect()
 
 def download_model():
     """Download the TFLite model if not exists"""
@@ -102,6 +107,14 @@ def process_frame(frame, interpreter, input_details, output_details, lcd_display
         width_cm = w * PIXEL_TO_CM
         height_cm = h * PIXEL_TO_CM
         
+        # Send measurements through MQTT
+        mqtt_client.publish_measurement(
+            height_cm=height_cm,
+            width_cm=width_cm,
+            confidence=1.0,  # Since we're using the largest contour
+            class_id=1  # Assuming 1 for body
+        )
+        
         # Add measurements to frame with background for better visibility
         measurements = f"W: {width_cm:.1f}cm H: {height_cm:.1f}cm"
         text_size = cv2.getTextSize(measurements, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
@@ -160,27 +173,29 @@ def main():
     print("\nCamera initialized successfully")
     print("Press 'q' to quit")
     
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Error: Could not read frame")
-            break
-        
-        # Process frame
-        result = process_frame(frame, interpreter, input_details, output_details, lcd)
-        
-        # Show result
-        cv2.imshow("Segmentation and Measurement", result)
-        
-        # Break on 'q' key
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    
-    # Cleanup
-    cap.release()
-    cv2.destroyAllWindows()
-    if lcd is not None:
-        lcd.cleanup()
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Could not read frame")
+                break
+            
+            # Process frame
+            result = process_frame(frame, interpreter, input_details, output_details, lcd)
+            
+            # Show result
+            cv2.imshow("Segmentation and Measurement", result)
+            
+            # Break on 'q' key
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        # Cleanup
+        cap.release()
+        cv2.destroyAllWindows()
+        if lcd is not None:
+            lcd.cleanup()
+        mqtt_client.disconnect()  # Disconnect MQTT client
 
 if __name__ == "__main__":
     main() 

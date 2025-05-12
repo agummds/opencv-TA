@@ -7,6 +7,7 @@ import requests
 from threading import Thread
 import queue
 import threading
+from mqtt_client import MQTTClient
 
 MODEL_URL = "https://raw.githubusercontent.com/agummds/Mask-RCNN-TA/master/model.tflite"
 MODEL_PATH = "model.tflite"
@@ -26,6 +27,10 @@ FRAME_TIME = 1.0/TARGET_FPS
 
 # Fixed thread count
 OPTIMAL_THREADS = 4
+
+# Inisialisasi MQTT client
+mqtt_client = MQTTClient()
+mqtt_client.connect()
 
 def pixel_to_cm(pixel_length):
     """
@@ -155,6 +160,14 @@ def process_frame(frame, interpreter, input_details, output_details):
             width = x2 - x1
             height_cm = pixel_to_cm(height)
             width_cm = pixel_to_cm(width)
+            
+            # Kirim data pengukuran melalui MQTT
+            mqtt_client.publish_measurement(
+                height_cm=height_cm,
+                width_cm=width_cm,
+                confidence=float(score),
+                class_id=class_id
+            )
             
             # Add measurements with background
             measurements = f"H: {height_cm:.1f}cm W: {width_cm:.1f}cm"
